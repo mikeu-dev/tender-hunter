@@ -3,6 +3,9 @@ import { db, tenders, sources, crawlJobs, eq } from '@tender-hunter/shared';
 import type { CrawlResult } from '../../adapters/base.adapter.js';
 import { LpseAdapter } from '../../adapters/lpse.adapter.js';
 import type { AdapterConfig } from '../../adapters/base.adapter.js';
+import { extractTenderData } from '../ai/extractor.js';
+import { analyzeSummaryAndRisks } from '../ai/summarizer.js';
+import { generateEmbedding } from '../ai/embedder.js';
 
 /**
  * Crawler Engine
@@ -13,7 +16,8 @@ import type { AdapterConfig } from '../../adapters/base.adapter.js';
  * 3. Execute crawl and collect results
  * 4. Deduplicate using content_hash (SHA-256)
  * 5. Store new/updated tenders in DB
- * 6. Record crawl job stats
+ * 6. Enrich new tenders with AI Analysis (Extract, Summary, Risks, Vector Embeddings)
+ * 7. Record crawl job stats
  */
 
 export class CrawlerEngine {
@@ -85,7 +89,7 @@ export class CrawlerEngine {
           stats.itemsUpdated++;
         } else {
           // Insert new tender
-          await db.insert(tenders).values({
+          const [newTender] = await db.insert(tenders).values({
             sourceId: source.id,
             externalId: item.externalId,
             url: item.url,
@@ -106,8 +110,16 @@ export class CrawlerEngine {
             status: item.status || 'open',
             rawData: item.rawData as any,
             contentHash,
-          });
+          }).returning();
+          
           stats.itemsNew++;
+
+          // 6. Enrich new tender with AI analysis (Extract, Summary, Risks, pgvector) in background
+          // Kita panggil secara asinkronus (tanpa await di loop utama) agar proses crawling sumber lain tidak terhambat,
+          // namun tetap ditangkap errornya secara aman.
+          this.enrichTenderWithAi(newTender.id).catch((err: any) => 
+            console.error(`[CrawlerEngine] Background AI enrichment failed for tender ${newTender.id}:`, err)
+          );
         }
       }
 
@@ -195,6 +207,56 @@ export class CrawlerEngine {
     }
 
     return results;
+  }
+
+  /**
+   * Mengayakan data tender baru dengan analisis AI (ekstraksi terstruktur, ringkasan eksekutif, risiko, dan pgvector)
+   */
+  async enrichTenderWithAi(tenderId: string): Promise<void> {
+    const tender = await db.query.tenders.findFirst({
+      where: eq(tenders.id, tenderId),
+    });
+    if (!tender) return;
+
+    try {
+      console.log(`[CrawlerEngine-AI] Enriching tender "${tender.title}" with AI...`);
+      const rawText = JSON.stringify(tender.rawData || {});
+      
+      // 1. Ekstraksi Data
+      const extracted = await extractTenderData(tender.title, rawText);
+      
+      // 2. Analisis Ringkasan & Risiko
+      const analysis = await analyzeSummaryAndRisks(tender.title, extracted.qualification, rawText);
+      
+      // 3. Hasilkan Vektor Embeddings
+      const embeddingText = `${tender.title} ${analysis.aiSummary} ${extracted.qualification}`;
+      const embedding = await generateEmbedding(embeddingText);
+
+      // 4. Simpan ke database
+      await db.update(tenders)
+        .set({
+          registrationDeadline: extracted.registrationDeadline,
+          submissionDeadline: extracted.submissionDeadline,
+          category: extracted.category,
+          subcategory: extracted.subcategory,
+          qualification: extracted.qualification,
+          eligibility: extracted.eligibility,
+          documentRequirements: extracted.documentRequirements,
+          timeline: extracted.timeline as any,
+          extractionConfidence: extracted.confidenceScore,
+          extractedAt: new Date(),
+          aiSummary: analysis.aiSummary,
+          aiRiskFlags: analysis.aiRiskFlags as any,
+          aiHiddenRequirements: analysis.aiHiddenRequirements,
+          embedding: embedding,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenders.id, tenderId));
+        
+      console.log(`[CrawlerEngine-AI] Successfully enriched tender with AI: "${tender.title}"`);
+    } catch (err) {
+      console.error(`[CrawlerEngine-AI] Failed to enrich tender ${tenderId} with AI:`, err);
+    }
   }
 
   /**
