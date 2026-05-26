@@ -6,6 +6,7 @@ import type { AdapterConfig } from '../../adapters/base.adapter.js';
 import { extractTenderData } from '../ai/extractor.js';
 import { analyzeSummaryAndRisks } from '../ai/summarizer.js';
 import { generateEmbedding } from '../ai/embedder.js';
+import { triggerNotificationPipeline } from '../notification/pipeline.js';
 
 /**
  * Crawler Engine
@@ -254,6 +255,11 @@ export class CrawlerEngine {
         .where(eq(tenders.id, tenderId));
         
       console.log(`[CrawlerEngine-AI] Successfully enriched tender with AI: "${tender.title}"`);
+      
+      // 5. Pemicu pipeline notifikasi lelang baru secara asinkron
+      triggerNotificationPipeline(tenderId).catch((notifErr: any) => 
+        console.error(`[CrawlerEngine-AI] Failed to trigger notification pipeline for tender ${tenderId}:`, notifErr)
+      );
     } catch (err) {
       console.error(`[CrawlerEngine-AI] Failed to enrich tender ${tenderId} with AI:`, err);
     }

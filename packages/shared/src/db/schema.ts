@@ -143,3 +143,31 @@ export const tenders = pgTable('tenders', {
   sourceIdx: index('idx_tenders_source').on(table.sourceId),
   createdIdx: index('idx_tenders_created').on(table.createdAt)
 }));
+
+export const alertRules = pgTable('alert_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  keywords: text('keywords').array().default(sql`'{}'`),
+  categories: varchar('categories', { length: 100 }).array().default(sql`'{}'`),
+  minBudget: bigint('min_budget', { mode: 'number' }).default(0),
+  minMatchScore: bigint('min_match_score', { mode: 'number' }).default(0),
+  channels: varchar('channels', { length: 50 }).array().default(sql`'{}'`),
+  telegramChatId: varchar('telegram_chat_id', { length: 100 }),
+  emailAddress: varchar('email_address', { length: 255 }),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
+
+export const notificationLogs = pgTable('notification_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  alertRuleId: uuid('alert_rule_id').references(() => alertRules.id, { onDelete: 'cascade' }),
+  tenderId: uuid('tender_id').references(() => tenders.id, { onDelete: 'cascade' }),
+  channel: varchar('channel', { length: 50 }).notNull(),
+  recipient: varchar('recipient', { length: 255 }).notNull(),
+  status: varchar('status', { length: 50 }).default('pending'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+});
+

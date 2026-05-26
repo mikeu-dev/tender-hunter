@@ -6,8 +6,10 @@ import authRouter from './modules/auth/index.js'
 import companyRouter from './modules/company/index.js'
 import crawlerRouter from './modules/crawler/index.js'
 import tenderRouter from './modules/tender/index.js'
+import notificationRouter from './modules/notification/index.js'
 import { startCrawlerWorker } from './modules/crawler/worker.js'
 import { syncCrawlerScheduler } from './modules/crawler/scheduler.js'
+import { startNotificationWorker } from './modules/notification/worker.js'
 
 const app = new Hono()
 
@@ -28,6 +30,7 @@ app.route('/api/auth', authRouter)
 app.route('/api/company', companyRouter)
 app.route('/api/crawler', crawlerRouter)
 app.route('/api/tenders', tenderRouter)
+app.route('/api/notification', notificationRouter)
 
 const port = 3000
 serve({
@@ -44,6 +47,14 @@ serve({
       .catch((err) => console.error('[Crawler] Failed to initialize scheduler:', err));
   } catch (err) {
     console.error('[Crawler] Error starting crawler infrastructure:', err);
+  }
+
+  // Inisialisasi background notification worker
+  try {
+    startNotificationWorker();
+    console.log('[Notification] Background worker started successfully.');
+  } catch (err) {
+    console.error('[Notification] Failed to start background notification worker:', err);
   }
 })
 
