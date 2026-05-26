@@ -1,0 +1,23 @@
+{
+  "name": "@tender-hunter/api",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.14",
+    "@tender-hunter/shared": "workspace:*",
+    "better-auth": "^1.6.11",
+    "bullmq": "^5.77.3",
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.23",
+    "ioredis": "^5.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "tsx": "^4.7.1",
+    "typescript": "^5.8.3"
+  }
+}
