@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tender_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tender_hunter}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - tender_network
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_prod_data:/data
+    restart: unless-stopped
+    networks:
+      - tender_network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://${POSTGRES_USER:-tender_user}:${POSTGRES_PASSWORD:-tender_password}@postgres:5432/${POSTGRES_DB:-tender_hunter}
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=http://localhost
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_123}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - MIDTRANS_CLIENT_KEY=${MIDTRANS_CLIENT_KEY}
+      - MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY}
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - tender_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      - NODE_ENV=production
+      - PUBLIC_API_URL=http://localhost/api
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - tender_network
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+    networks:
+      - tender_network
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+networks:
+  tender_network:
+    driver: bridge

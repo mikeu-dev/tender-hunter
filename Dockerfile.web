@@ -1,0 +1,25 @@
+FROM node:20-alpine3.20
+RUN apk update && apk upgrade --no-cache
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Salin berkas package.json monorepo & workspaces
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Salin node_modules root hoisted yang sudah bersih
+COPY node_modules ./node_modules
+
+# Salin shared package (web juga membutuhkan shared package)
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/dist ./packages/shared/dist
+
+# Salin apps/web
+COPY apps/web/package.json ./apps/web/
+COPY apps/web/build ./apps/web/build
+
+# Rekonstruksi symlink internal workspace untuk @tender-hunter/shared secara fisik sejati!
+RUN mkdir -p node_modules/@tender-hunter && ln -sf /app/packages/shared node_modules/@tender-hunter/shared
+
+EXPOSE 3000
+CMD ["node", "apps/web/build/index.js"]

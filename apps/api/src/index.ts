@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { secureHeaders } from 'hono/secure-headers'
 import authRouter from './modules/auth/index.js'
 import companyRouter from './modules/company/index.js'
 import crawlerRouter from './modules/crawler/index.js'
@@ -14,6 +15,8 @@ import { startNotificationWorker } from './modules/notification/worker.js'
 
 const app = new Hono()
 
+app.use('*', secureHeaders())
+
 app.use('*', cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -22,6 +25,22 @@ app.use('*', cors({
   maxAge: 600,
   credentials: true,
 }))
+
+app.onError((err, c) => {
+  const errorLog = {
+    timestamp: new Date().toISOString(),
+    message: err.message,
+    stack: err.stack,
+    path: c.req.path,
+    method: c.req.method,
+  }
+  console.error(JSON.stringify(errorLog))
+  return c.json({
+    success: false,
+    message: 'Internal Server Error',
+    error: process.env.NODE_ENV === 'production' ? undefined : err.message
+  }, 500)
+})
 
 app.get('/', (c) => {
   return c.text('Tender Hunter API v1')
