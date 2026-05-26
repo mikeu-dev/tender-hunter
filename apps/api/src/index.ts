@@ -7,6 +7,7 @@ import companyRouter from './modules/company/index.js'
 import crawlerRouter from './modules/crawler/index.js'
 import tenderRouter from './modules/tender/index.js'
 import notificationRouter from './modules/notification/index.js'
+import billingRouter from './modules/billing/index.js'
 import { startCrawlerWorker } from './modules/crawler/worker.js'
 import { syncCrawlerScheduler } from './modules/crawler/scheduler.js'
 import { startNotificationWorker } from './modules/notification/worker.js'
@@ -31,6 +32,7 @@ app.route('/api/company', companyRouter)
 app.route('/api/crawler', crawlerRouter)
 app.route('/api/tenders', tenderRouter)
 app.route('/api/notification', notificationRouter)
+app.route('/api/billing', billingRouter)
 
 const port = 3000
 serve({

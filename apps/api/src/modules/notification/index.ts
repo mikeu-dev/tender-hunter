@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { db, alertRules, notificationLogs, desc, eq, and } from '@tender-hunter/shared';
+import { checkAlertRulesLimitMiddleware } from '../billing/limits.js';
 
 const notificationRouter = new Hono();
 
@@ -28,10 +29,11 @@ notificationRouter.get('/rules', async (c) => {
 
 /**
  * POST /api/notification/rules
- * Create a new alert rule
+ * Create a new alert rule (protected by subscription limits middleware)
  */
-notificationRouter.post('/rules', async (c) => {
-  const body = await c.req.json();
+notificationRouter.post('/rules', checkAlertRulesLimitMiddleware, async (c) => {
+  // Gunakan body yang sudah di-parse dan divalidasi oleh middleware
+  const body = (c as any).get('parsedJsonBody') || await c.req.json().catch(() => ({}));
 
   if (!body.name || !body.orgId) {
     return c.json({ error: 'name and orgId are required' }, 400);
