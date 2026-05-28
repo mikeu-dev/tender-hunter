@@ -1,18 +1,16 @@
 import { BaseAdapter, type AdapterConfig, type CrawlResult } from './base.adapter.js';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+// Apply stealth plugin
+puppeteer.default.use(StealthPlugin());
 
 /**
  * LPSE Adapter
  * 
  * Crawls Indonesian government e-procurement portals (LPSE/SPSE).
  * LPSE portals expose a JSON API at /dt/lelang endpoint which we leverage
- * for data extraction without needing a full browser.
- * 
- * Typical LPSE URL pattern:
- *   https://lpse.{instansi}.go.id
- * 
- * Known API endpoints:
- *   GET /dt/lelang?draw=1&start=0&length=50  → Returns JSON of active tenders
- *   GET /lelang/{id}/pengumumanlelang         → Detail page HTML
+ * for data extraction using a headless browser to bypass WAF/Cloudflare.
  */
 
 interface LpseApiResponse {
@@ -37,48 +35,72 @@ export class LpseAdapter extends BaseAdapter {
     const pageSize = 50;
     const maxPages = this.config.maxPages || 5;
 
-    for (let page = 0; page < maxPages; page++) {
-      const start = page * pageSize;
-      const url = `${this.config.baseUrl}/dt/lelang?draw=${page + 1}&columns%5B0%5D%5Bdata%5D=0&start=${start}&length=${pageSize}&search%5Bvalue%5D=`;
+    console.log(`[LPSE:${this.name}] Launching Puppeteer Stealth Browser...`);
+    
+    let browser;
+    try {
+      browser = await puppeteer.default.launch({
+        headless: true,
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-dev-shm-usage',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ],
+      });
+      
+      const page = await browser.newPage();
+      // Mock common headers
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      });
 
-      try {
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'TenderHunter/1.0 (tender intelligence crawler)',
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(15000),
-        });
+      for (let p = 0; p < maxPages; p++) {
+        const start = p * pageSize;
+        const url = `${this.config.baseUrl}/dt/lelang?draw=${p + 1}&columns%5B0%5D%5Bdata%5D=0&start=${start}&length=${pageSize}&search%5Bvalue%5D=`;
 
-        if (!response.ok) {
-          console.warn(`[LPSE:${this.name}] HTTP ${response.status} for page ${page}`);
+        try {
+          console.log(`[LPSE:${this.name}] Navigating to: ${url}`);
+          // Puppeteer navigates to the JSON endpoint
+          await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+          
+          // Extract the JSON text from the body
+          const jsonText = await page.evaluate(() => {
+            return document.body.innerText || document.body.textContent || '{}';
+          });
+
+          const json: LpseApiResponse = JSON.parse(jsonText);
+          const rows = json.data || json.aaData || [];
+
+          if (rows.length === 0) {
+            break; // No more data
+          }
+
+          for (const row of rows) {
+            const parsed = this.parseRow(row);
+            if (parsed) {
+              results.push(parsed);
+            }
+          }
+
+          // Respect rate limiting
+          if (p < maxPages - 1 && rows.length === pageSize) {
+            await this.delay(this.config.requestDelay || 2000);
+          } else {
+            break; // Last page had fewer results
+          }
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          console.error(`[LPSE:${this.name}] Error crawling page ${p}: ${errMsg}`);
           break;
         }
-
-        const json: LpseApiResponse = await response.json() as LpseApiResponse;
-        const rows = json.data || json.aaData || [];
-
-        if (rows.length === 0) {
-          break; // No more data
-        }
-
-        for (const row of rows) {
-          const parsed = this.parseRow(row);
-          if (parsed) {
-            results.push(parsed);
-          }
-        }
-
-        // Respect rate limiting
-        if (page < maxPages - 1 && rows.length === pageSize) {
-          await this.delay(this.config.requestDelay || 2000);
-        } else {
-          break; // Last page had fewer results
-        }
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : String(error);
-        console.error(`[LPSE:${this.name}] Error crawling page ${page}: ${errMsg}`);
-        break;
+      }
+    } catch (launchErr) {
+      console.error(`[LPSE:${this.name}] Failed to launch browser:`, launchErr);
+    } finally {
+      if (browser) {
+        await browser.close().catch(() => {});
       }
     }
 
@@ -87,17 +109,25 @@ export class LpseAdapter extends BaseAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
+    let browser;
     try {
-      const response = await fetch(`${this.config.baseUrl}/dt/lelang?draw=1&start=0&length=1`, {
-        headers: {
-          'User-Agent': 'TenderHunter/1.0 (health check)',
-          'Accept': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000),
+      browser = await puppeteer.default.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
       });
-      return response.ok;
+      const page = await browser.newPage();
+      await page.goto(`${this.config.baseUrl}/dt/lelang?draw=1&start=0&length=1`, {
+        waitUntil: 'networkidle2',
+        timeout: 15000,
+      });
+      
+      const content = await page.evaluate(() => document.body.innerText);
+      JSON.parse(content); // Try parsing
+      return true;
     } catch {
       return false;
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
   }
 

@@ -201,4 +201,54 @@ crawlerRouter.get('/health', async (c) => {
   })));
 });
 
+/**
+ * GET /api/crawler/mock-lpse/dt/lelang
+ * Mock LPSE Endpoint that returns realistic HTML in JSON format
+ * to test the crawler adapter parsing logic.
+ */
+crawlerRouter.get('/mock-lpse/dt/lelang', (c) => {
+  // Simulating realistic LPSE HTML tables returned via JSON
+  const mockRows = [
+    [
+      '<a href="/eproc4/lelang/1029302/pengumumanlelang">Pengadaan Infrastruktur Jaringan Fiber Optik Terpadu</a>',
+      'Pemerintah Kota Mockup',
+      'Masa Sanggah Hasil Evaluasi',
+      '<span class="text-right">Rp 4.500.000.000,00</span>',
+      'Usaha Menengah',
+      'Tender - Pascakualifikasi Satu File - Harga Terendah Sistem Gugur'
+    ],
+    [
+      '<a href="/eproc4/lelang/1029303/pengumumanlelang">Sewa Layanan Cloud Computing Pemerintahan 2026</a>',
+      'Kementerian Komunikasi Simulasi',
+      'Pengumuman Pascakualifikasi',
+      '<span class="text-right">Rp 8.125.000.000,00</span>',
+      'Usaha Besar',
+      'Tender - Prakualifikasi Dua File'
+    ],
+    [
+      '<a href="/eproc4/lelang/1029304/pengumumanlelang">Jasa Keamanan Siber (SOC) 24/7 Nasional</a>',
+      'Badan Siber Mockup Nasional',
+      'Penandatanganan Kontrak',
+      '<span class="text-right">Rp 12.000.000.000,00</span>',
+      'Usaha Besar',
+      'Tender - Pascakualifikasi Satu File'
+    ],
+    [
+      '<a href="/eproc4/lelang/1029305/pengumumanlelang">Pengadaan Laptop dan PC Desktop Operasional</a>',
+      'Dinas Pendidikan Daerah Mockup',
+      'Evaluasi Administrasi, Kualifikasi, Teknis, dan Harga',
+      '<span class="text-right">Rp 750.000.000,00</span>',
+      'Usaha Kecil',
+      'E-Purchasing'
+    ]
+  ];
+
+  return c.json({
+    draw: 1,
+    recordsTotal: 4,
+    recordsFiltered: 4,
+    data: mockRows
+  });
+});
+
 export default crawlerRouter;
