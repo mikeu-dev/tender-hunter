@@ -92,7 +92,7 @@
   </div>
 
   <!-- Current Plan Banner -->
-  <div class="p-6 rounded-2xl bg-gradient-to-r from-emerald-900/40 to-slate-900 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
+  <div class="p-6 rounded-2xl bg-linear-to-r from-emerald-900/40 to-slate-900 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
     <div class="space-y-2">
       <div class="flex items-center gap-3">
         <span class="px-3 py-1 rounded bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-400 uppercase tracking-wider">
