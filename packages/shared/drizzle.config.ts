@@ -5,6 +5,6 @@ export default defineConfig({
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL || 'postgres://tender_user:tender_password@localhost:5433/tender_hunter',
+    url: process.env.DATABASE_URL || 'postgres://tender_user:tender_password@localhost:5432/tender_hunter',
   },
 });
